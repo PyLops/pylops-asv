@@ -136,6 +136,9 @@ class BlendingGroup(_Blending):
             self.times(continuous=False),
             n_groups=self.ns // self.group_size,
             group_size=self.group_size,
+            # explicit numpy dtype: with the default string dtype and scipy>=1.18
+            # the operator dtype is inferred as a string type ("<U7")
+            dtype=np.float64,
         )
 
 
@@ -149,4 +152,7 @@ class BlendingHalf(_Blending):
             self.times(continuous=False),
             n_groups=self.ns // self.group_size,
             group_size=self.group_size,
+            # explicit numpy dtype: with the default string dtype and scipy>=1.18
+            # the operator dtype is inferred as a string type ("<U7")
+            dtype=np.float64,
         )
