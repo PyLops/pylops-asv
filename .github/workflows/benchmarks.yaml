@@ -23,7 +23,7 @@ on:
         type: string
         default: "0"
       skip_benchmarked:
-        description: "Skip commits that already have results"
+        description: "Skip commits and benchmarks that already have results (untick to re-benchmark)"
         type: boolean
         default: true
       quick:
@@ -109,7 +109,7 @@ jobs:
         run: |
           uv run --no-sync asv run \
             --machine "$ASV_MACHINE" \
-            --skip-existing-successful \
+            ${{ (github.event_name == 'schedule' || inputs.skip_benchmarked) && '--skip-existing-successful' || '' }} \
             --show-stderr \
             --launch-method forkserver \
             --durations 15 \
