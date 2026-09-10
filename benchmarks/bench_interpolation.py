@@ -1,5 +1,6 @@
 """Benchmarks of interpolation and resampling operators
-(``pytests/test_interpolation.py``, ``pytests/test_interpolation_spline.py``)."""
+(``pytests/test_interpolation.py``, ``pytests/test_interpolation_spline.py``,
+``pytests/test_downsample.py``)."""
 
 import numpy as np
 
@@ -38,3 +39,8 @@ class InterpCubicSpline(OperatorBenchmark):
         return getop("signalprocessing.InterpCubicSpline")(
             dims=DIMS, iava=_iava(DIMS[0], DIMS[0] // 2), axis=0
         )
+
+
+class Downsample2D(OperatorBenchmark):
+    def make_operator(self):
+        return getop("signalprocessing.Downsample2D")((1024, 1024), factors=(4, 4))
