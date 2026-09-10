@@ -1,0 +1,180 @@
+# Airspeed velocity (asv) benchmarks of all PyLops operators.
+#
+# * schedule (nightly): benchmark the heads of pylops master/dev and the latest
+#   release tag, skipping commits that already have results
+# * workflow_dispatch: back-fill releases (`last_tags`) or any revision range
+#
+# Results are committed to `results/` on `main`; the html is generated from
+# them with `asv publish` and deployed through GitHub Pages (source: "GitHub
+# Actions") at https://pylops.github.io/pylops-asv/.
+name: PyLops-benchmarks
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      revisions:
+        description: "pylops revision range passed to `git rev-list` (e.g. v2.8.0^!, v2.7.0..master). Ignored when last_tags > 0"
+        type: string
+        default: "dev^!"
+      last_tags:
+        description: "Benchmark the last N release tags plus the heads of master and dev (0 = use revisions)"
+        type: string
+        default: "0"
+      skip_benchmarked:
+        description: "Skip commits that already have results"
+        type: boolean
+        default: true
+      quick:
+        description: "Run every benchmark only once (smoke test)"
+        type: boolean
+        default: false
+
+# Never run two benchmark workflows at once: they both commit to results/
+concurrency:
+  group: asv-benchmarks
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: "3.13"
+  ASV_MACHINE: gha-ubuntu-latest
+  PYLOPS_DIR: pylops
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Resolve which pylops commits to benchmark
+  # ---------------------------------------------------------------------------
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      commits: ${{ steps.select.outputs.commits }}
+      count: ${{ steps.select.outputs.count }}
+    steps:
+      - name: Check out pylops-asv
+        uses: actions/checkout@v6
+      - name: Check out pylops
+        uses: actions/checkout@v6
+        with:
+          repository: PyLops/pylops
+          path: ${{ env.PYLOPS_DIR }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Select commits
+        id: select
+        env:
+          LAST_TAGS: ${{ inputs.last_tags || '1' }}
+          REVISIONS: ${{ inputs.revisions || 'dev^!' }}
+          SKIP: ${{ github.event_name == 'schedule' || inputs.skip_benchmarked }}
+        run: |
+          skip=""
+          if [ "$SKIP" = "true" ]; then
+            skip="--skip-benchmarked results"
+          fi
+          if [ "$LAST_TAGS" != "0" ]; then
+            commits=$(python3 ci/select_commits.py --repo "$PYLOPS_DIR" $skip --last-tags "$LAST_TAGS")
+          else
+            commits=$(python3 ci/select_commits.py --repo "$PYLOPS_DIR" $skip --revisions "$REVISIONS")
+          fi
+          count=$(echo "$commits" | python3 -c "import json, sys; print(len(json.load(sys.stdin)))")
+          echo "Selected $count commit(s): $commits"
+          echo "commits=$commits" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+  # ---------------------------------------------------------------------------
+  # Benchmark each selected commit in its own asv environment
+  # ---------------------------------------------------------------------------
+  run:
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        commit: ${{ fromJSON(needs.plan.outputs.commits) }}
+    steps:
+      - name: Check out pylops-asv
+        uses: actions/checkout@v6
+      - name: Install uv with Python ${{ env.PYTHON_VERSION }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install asv
+        run: uv sync --locked --no-dev
+      - name: Register machine
+        run: uv run --no-sync asv machine --yes --machine "$ASV_MACHINE"
+      - name: Run benchmarks for ${{ matrix.commit }}
+        run: |
+          uv run --no-sync asv run \
+            --machine "$ASV_MACHINE" \
+            --skip-existing-successful \
+            --show-stderr \
+            --launch-method forkserver \
+            --durations 15 \
+            ${{ inputs.quick && '--quick' || '' }} \
+            "${{ matrix.commit }}^!"
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: asv-results-${{ matrix.commit }}
+          path: results
+          if-no-files-found: error
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
+  # Commit the results to main, build and deploy the website
+  # ---------------------------------------------------------------------------
+  publish:
+    needs: [plan, run]
+    if: always() && needs.plan.result == 'success' && needs.run.result != 'skipped' && github.repository == 'PyLops/pylops-asv'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out pylops-asv
+        uses: actions/checkout@v6
+      - name: Install uv with Python ${{ env.PYTHON_VERSION }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install asv
+        run: uv sync --locked --no-dev
+      - name: Download new results
+        uses: actions/download-artifact@v5
+        with:
+          pattern: asv-results-*
+          path: new-results
+          merge-multiple: true
+      - name: Commit and push results
+        run: |
+          cp -r new-results/. results/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results
+          if git diff --cached --quiet; then
+            echo "No new results"
+            exit 0
+          fi
+          git commit -m "asv results ($GITHUB_EVENT_NAME, run $GITHUB_RUN_ID)"
+          for attempt in 1 2 3; do
+            git push origin HEAD:main && break
+            git pull --rebase origin main
+          done
+      - name: Build website
+        run: uv run --no-sync asv publish
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .asv/html
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

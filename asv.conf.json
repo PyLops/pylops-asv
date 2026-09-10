@@ -1,0 +1,54 @@
+{
+    // The version of the config file format.  Do not change, unless
+    // you know what you are doing.
+    "version": 1,
+
+    // Project details: the benchmarked project is PyLops, cloned by asv from
+    // GitHub into .asv/project. Local runs (make bench) override "repo" with a
+    // local checkout through ci/local_conf.py.
+    "project": "pylops",
+    "project_url": "https://pylops.readthedocs.io/",
+    "repo": "https://github.com/PyLops/pylops.git",
+    "branches": ["master", "dev"],
+    "dvcs": "git",
+    "show_commit_url": "https://github.com/PyLops/pylops/commit/",
+
+    // Environments: one per-commit uv virtualenv with the latest release of
+    // each dependency in the matrix (an empty string means "latest").
+    // Operators whose optional dependency is not listed here are skipped.
+    "environment_type": "uv",
+    "pythons": ["3.13"],
+    "matrix": {
+        "req": {
+            "numpy": [""],
+            "scipy": [""],
+            "numba": [""],
+            "pyfftw": [""],
+            "PyWavelets": [""],
+            "scikit-fmm": [""]
+        }
+    },
+
+    // Build with pip (build isolation fetches hatchling/hatch-vcs), so that
+    // both setup.py-era and pyproject-only releases can be benchmarked.
+    "build_command": [
+        "python -m pip wheel --no-deps -w {build_cache_dir} {build_dir}"
+    ],
+    "install_command": [
+        "in-dir={env_dir} python -m pip install {wheel_file}"
+    ],
+    "uninstall_command": [
+        "return-code=any python -m pip uninstall -y {project}"
+    ],
+    "install_timeout": 1200,
+    "default_benchmark_timeout": 300,
+
+    // Directories: results are tracked in git (committed by the benchmarks
+    // workflow), environments and html live in the gitignored .asv/
+    "benchmark_dir": "benchmarks",
+    "env_dir": ".asv/env",
+    "results_dir": "results",
+    "html_dir": ".asv/html",
+    "build_cache_size": 8,
+    "hash_length": 8
+}

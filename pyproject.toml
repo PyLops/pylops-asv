@@ -1,0 +1,51 @@
+[project]
+name = "pylops-asv"
+version = "0.1.0"
+description = "Continuous benchmarking of PyLops operators with airspeed velocity (asv)"
+readme = "README.md"
+license = "LGPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = [
+    "asv >= 0.6.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/PyLops/pylops-asv"
+Benchmarks = "https://pylops.github.io/pylops-asv/"
+PyLops = "https://github.com/PyLops/pylops"
+
+[dependency-groups]
+# pylops (latest release) is only needed to import the suite (`asv check`);
+# `make bench` replaces it with an editable install of $PYLOPS_REPO
+dev = [
+    "ruff",
+    "pre-commit",
+    "pylops",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+src = ["benchmarks", "ci"]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "F",   # pyflakes
+  "W",   # pycodestyle warnings
+  "B",   # flake8-bugbear
+  "EM",  # flake8-errmsg
+  "UP",  # pyupgrade
+  "I"    # isort
+]
+ignore = [
+  "E501",  # line too long (for comments and strings)
+  "UP031", # use of old '%' formatting instead of f-strings
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["benchmarks"]

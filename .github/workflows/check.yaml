@@ -1,0 +1,36 @@
+# Validate the benchmark suite: every benchmark module must import against the
+# latest pylops release and pass ruff. Nothing is executed.
+name: PyLops-benchmarks-check
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "benchmarks/**"
+      - "ci/**"
+      - "asv.conf.json"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/**"
+  pull_request:
+
+env:
+  PYTHON_VERSION: "3.13"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pylops-asv
+        uses: actions/checkout@v6
+      - name: Install uv with Python ${{ env.PYTHON_VERSION }}
+        uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Install asv, ruff and pylops
+        run: uv sync --locked
+      - name: Lint
+        run: uv run ruff check . && uv run ruff format --check .
+      - name: Validate benchmark suite
+        run: uv run asv check -E existing
