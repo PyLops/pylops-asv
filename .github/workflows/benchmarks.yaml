@@ -1,6 +1,6 @@
 # Airspeed velocity (asv) benchmarks of all PyLops operators.
 #
-# * schedule (nightly): benchmark the heads of pylops master/dev and the latest
+# * schedule (nightly, 03:23 UTC): benchmark the heads of pylops master/dev and the latest
 #   release tag, skipping commits that already have results
 # * workflow_dispatch: back-fill releases (`last_tags`) or any revision range
 #
@@ -11,7 +11,7 @@ name: PyLops-benchmarks
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "23 3 * * *"
   workflow_dispatch:
     inputs:
       revisions:
