@@ -2,7 +2,10 @@
 #
 # * schedule (nightly, 03:23 UTC): benchmark the heads of pylops master/dev and the latest
 #   release tag, skipping commits that already have results
-# * workflow_dispatch: back-fill releases (`last_tags`) or any revision range
+# * workflow_dispatch: back-fill releases (`last_tags`) or any revision range. The two
+#   skip switches are independent: untick `skip_commits` to revisit commits that already
+#   have results while leaving `skip_benchmarks` ticked, and only the benchmarks without
+#   a result run (what a new operator added to the suite needs)
 #
 # Results are committed to `results/` on `main`; the html is generated from
 # them with `asv publish` and deployed through GitHub Pages (source: "GitHub
@@ -22,8 +25,12 @@ on:
         description: "Benchmark the last N release tags plus the heads of master and dev (0 = use revisions)"
         type: string
         default: "0"
-      skip_benchmarked:
-        description: "Skip commits and benchmarks that already have results (untick to re-benchmark)"
+      skip_commits:
+        description: "Skip commits that already have a results file (untick to back-fill commits that were benchmarked before)"
+        type: boolean
+        default: true
+      skip_benchmarks:
+        description: "Within each selected commit, skip the benchmarks that already have a successful result (untick to re-run them all)"
         type: boolean
         default: true
       quick:
@@ -65,7 +72,7 @@ jobs:
         env:
           LAST_TAGS: ${{ inputs.last_tags || '1' }}
           REVISIONS: ${{ inputs.revisions || 'dev^!' }}
-          SKIP: ${{ github.event_name == 'schedule' || inputs.skip_benchmarked }}
+          SKIP: ${{ github.event_name == 'schedule' || inputs.skip_commits }}
         run: |
           skip=""
           if [ "$SKIP" = "true" ]; then
@@ -109,7 +116,7 @@ jobs:
         run: |
           uv run --no-sync asv run \
             --machine "$ASV_MACHINE" \
-            ${{ (github.event_name == 'schedule' || inputs.skip_benchmarked) && '--skip-existing-successful' || '' }} \
+            ${{ (github.event_name == 'schedule' || inputs.skip_benchmarks) && '--skip-existing-successful' || '' }} \
             --show-stderr \
             --launch-method forkserver \
             --durations 15 \
