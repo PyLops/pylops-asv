@@ -4381,6 +4381,56 @@
         "version": "5aeadcd9069cf5b0aecd9d8275ce77268e23e6728313d42e52105cd1dfb6e707",
         "warmup_time": 0.1
     },
+    "bench_twoway.AcousticWave2D.peakmem_adjoint": {
+        "code": "class OperatorBenchmark:\n    def peakmem_adjoint(self, *args):\n        self.op.rmatvec(self.y)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "name": "bench_twoway.AcousticWave2D.peakmem_adjoint",
+        "param_names": [],
+        "params": [],
+        "timeout": 600,
+        "type": "peakmemory",
+        "unit": "bytes",
+        "version": "bf808f5d5aa1aff598a1fa43d7b534f9adafcae8de637517e103a483002ee272"
+    },
+    "bench_twoway.AcousticWave2D.peakmem_forward": {
+        "code": "class OperatorBenchmark:\n    def peakmem_forward(self, *args):\n        self.op.matvec(self.x)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "name": "bench_twoway.AcousticWave2D.peakmem_forward",
+        "param_names": [],
+        "params": [],
+        "timeout": 600,
+        "type": "peakmemory",
+        "unit": "bytes",
+        "version": "6af39d61f42373d5f280f73c6be4cb60e542415f3db4ce3630e2e1c70768365b"
+    },
+    "bench_twoway.AcousticWave2D.time_adjoint": {
+        "code": "class OperatorBenchmark:\n    def time_adjoint(self, *args):\n        self.op.rmatvec(self.y)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "min_run_count": 2,
+        "name": "bench_twoway.AcousticWave2D.time_adjoint",
+        "number": 0,
+        "param_names": [],
+        "params": [],
+        "rounds": 1,
+        "sample_time": 0.05,
+        "timeout": 600,
+        "type": "time",
+        "unit": "seconds",
+        "version": "77862a40abf05f63e6e9e42d1e07a50ab398cc475dfe56cf1f54476055ad286b",
+        "warmup_time": 0.1
+    },
+    "bench_twoway.AcousticWave2D.time_forward": {
+        "code": "class OperatorBenchmark:\n    def time_forward(self, *args):\n        self.op.matvec(self.x)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "min_run_count": 2,
+        "name": "bench_twoway.AcousticWave2D.time_forward",
+        "number": 0,
+        "param_names": [],
+        "params": [],
+        "rounds": 1,
+        "sample_time": 0.05,
+        "timeout": 600,
+        "type": "time",
+        "unit": "seconds",
+        "version": "5aeadcd9069cf5b0aecd9d8275ce77268e23e6728313d42e52105cd1dfb6e707",
+        "warmup_time": 0.1
+    },
     "bench_waveeqprocessing.BlendingContinuous.peakmem_adjoint": {
         "code": "class OperatorBenchmark:\n    def peakmem_adjoint(self, *args):\n        self.op.rmatvec(self.y)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
         "name": "bench_waveeqprocessing.BlendingContinuous.peakmem_adjoint",
@@ -5103,7 +5153,7 @@
                 "'linear'"
             ]
         ],
-        "setup_cache_key": "bench_wavelets:36",
+        "setup_cache_key": "bench_wavelets:59",
         "timeout": 300,
         "type": "peakmemory",
         "unit": "bytes",
@@ -5121,7 +5171,7 @@
                 "'linear'"
             ]
         ],
-        "setup_cache_key": "bench_wavelets:36",
+        "setup_cache_key": "bench_wavelets:59",
         "timeout": 300,
         "type": "peakmemory",
         "unit": "bytes",
@@ -5143,7 +5193,7 @@
         ],
         "rounds": 1,
         "sample_time": 0.05,
-        "setup_cache_key": "bench_wavelets:36",
+        "setup_cache_key": "bench_wavelets:59",
         "timeout": 300,
         "type": "time",
         "unit": "seconds",
@@ -5166,11 +5216,89 @@
         ],
         "rounds": 1,
         "sample_time": 0.05,
-        "setup_cache_key": "bench_wavelets:36",
+        "setup_cache_key": "bench_wavelets:59",
         "timeout": 300,
         "type": "time",
         "unit": "seconds",
         "version": "3d3cad2602fb06f5f44f73d4ba34938f534c65ad8c3c74305457badb154d39ab",
+        "warmup_time": 0.1
+    },
+    "bench_wavelets.UDCT.peakmem_adjoint": {
+        "code": "class OperatorBenchmark:\n    def peakmem_adjoint(self, *args):\n        self.op.rmatvec(self.y)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "name": "bench_wavelets.UDCT.peakmem_adjoint",
+        "param_names": [
+            "transform_kind"
+        ],
+        "params": [
+            [
+                "'real'",
+                "'complex'"
+            ]
+        ],
+        "timeout": 300,
+        "type": "peakmemory",
+        "unit": "bytes",
+        "version": "bf808f5d5aa1aff598a1fa43d7b534f9adafcae8de637517e103a483002ee272"
+    },
+    "bench_wavelets.UDCT.peakmem_forward": {
+        "code": "class OperatorBenchmark:\n    def peakmem_forward(self, *args):\n        self.op.matvec(self.x)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "name": "bench_wavelets.UDCT.peakmem_forward",
+        "param_names": [
+            "transform_kind"
+        ],
+        "params": [
+            [
+                "'real'",
+                "'complex'"
+            ]
+        ],
+        "timeout": 300,
+        "type": "peakmemory",
+        "unit": "bytes",
+        "version": "6af39d61f42373d5f280f73c6be4cb60e542415f3db4ce3630e2e1c70768365b"
+    },
+    "bench_wavelets.UDCT.time_adjoint": {
+        "code": "class OperatorBenchmark:\n    def time_adjoint(self, *args):\n        self.op.rmatvec(self.y)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "min_run_count": 2,
+        "name": "bench_wavelets.UDCT.time_adjoint",
+        "number": 0,
+        "param_names": [
+            "transform_kind"
+        ],
+        "params": [
+            [
+                "'real'",
+                "'complex'"
+            ]
+        ],
+        "rounds": 1,
+        "sample_time": 0.05,
+        "timeout": 300,
+        "type": "time",
+        "unit": "seconds",
+        "version": "77862a40abf05f63e6e9e42d1e07a50ab398cc475dfe56cf1f54476055ad286b",
+        "warmup_time": 0.1
+    },
+    "bench_wavelets.UDCT.time_forward": {
+        "code": "class OperatorBenchmark:\n    def time_forward(self, *args):\n        self.op.matvec(self.x)\n\n    def setup(self, *args):\n        self.op = self.make_operator(*args)\n        rng = np.random.default_rng(0)\n        self.x = random_vector(rng, self.op.shape[1], self.op.dtype)\n        self.y = random_vector(rng, self.op.shape[0], self.op.dtype)\n        # warm up outside of the timed region (numba JIT, FFTW plans, caches)\n        self.op.matvec(self.x)\n        self.op.rmatvec(self.y)",
+        "min_run_count": 2,
+        "name": "bench_wavelets.UDCT.time_forward",
+        "number": 0,
+        "param_names": [
+            "transform_kind"
+        ],
+        "params": [
+            [
+                "'real'",
+                "'complex'"
+            ]
+        ],
+        "rounds": 1,
+        "sample_time": 0.05,
+        "timeout": 300,
+        "type": "time",
+        "unit": "seconds",
+        "version": "5aeadcd9069cf5b0aecd9d8275ce77268e23e6728313d42e52105cd1dfb6e707",
         "warmup_time": 0.1
     },
     "version": 2
