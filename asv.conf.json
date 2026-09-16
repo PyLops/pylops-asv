@@ -16,6 +16,11 @@
     // Environments: one per-commit uv virtualenv with the latest release of
     // each dependency in the matrix (an empty string means "latest").
     // Operators whose optional dependency is not listed here are skipped.
+    //
+    // devito (AcousticWave2D) ships the `examples` package that pylops imports,
+    // and `examples.seismic.model` uses pytest at import time: with devito but
+    // without pytest installed, `import pylops` itself fails and every benchmark
+    // errors, hence pytest is part of the matrix.
     "environment_type": "uv",
     "pythons": ["3.13"],
     "matrix": {
@@ -25,7 +30,10 @@
             "numba": [""],
             "pyfftw": [""],
             "PyWavelets": [""],
-            "scikit-fmm": [""]
+            "scikit-fmm": [""],
+            "curvelets": [""],
+            "devito": [""],
+            "pytest": [""]
         }
     },
 

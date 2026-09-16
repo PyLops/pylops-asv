@@ -38,6 +38,8 @@ except ImportError:  # very old releases
     deps = None
 
 _FLAGS = {
+    "curvelets": "curvelets_enabled",
+    "devito": "devito_enabled",
     "numba": "numba_enabled",
     "pyfftw": "pyfftw_enabled",
     "pywt": "pywt_enabled",

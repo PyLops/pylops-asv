@@ -19,7 +19,9 @@ of the forward (`matvec`) and adjoint (`rmatvec`) passes. The results are publis
 - `asv.conf.json` points asv at the PyLops GitHub repository: for each benchmarked commit asv
   clones it, builds a wheel and installs it in a fresh `uv` environment with the latest
   release of every dependency in the matrix (numpy, scipy, numba, pyfftw, PyWavelets,
-  scikit-fmm).
+  scikit-fmm, curvelets, devito). A benchmark whose optional dependency is missing, or
+  whose operator does not exist yet in the benchmarked release, is *skipped* rather
+  than failed.
 - The `PyLops-benchmarks` GitHub Action runs every night on the heads of the `master` and
   `dev` branches of PyLops and on the latest release tag (commits that already have results
   are skipped). Results are committed to `results/` on `main` and the website is rebuilt
