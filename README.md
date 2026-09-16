@@ -30,6 +30,12 @@ of the forward (`matvec`) and adjoint (`rmatvec`) passes. The results are publis
   the same workflow manually (*Actions → PyLops-benchmarks → Run workflow*) with either the
   number of most recent release tags (`last_tags`) or a git revision range (`revisions`,
   e.g. `v2.7.0..master`). Tick `quick` for a smoke test that runs every benchmark once.
+- Two independent switches control what is skipped. `skip_commits` drops the commits that
+  already have a results file, and `skip_benchmarks` drops, within each selected commit,
+  the benchmarks that already have a successful result. **To back-fill a benchmark that
+  has just been added to the suite, untick `skip_commits` and leave `skip_benchmarks`
+  ticked**: the commits are revisited but only the missing benchmarks run. Unticking both
+  re-benchmarks everything from scratch.
 
 Benchmarks run on GitHub-hosted runners (`ubuntu-latest`), so timings are noisy across
 runs: look at trends and at the peak-memory numbers rather than at single points.
