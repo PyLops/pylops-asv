@@ -145,9 +145,12 @@ jobs:
       # serves the interrupts. `asv run` builds the pylops wheel as well, and
       # the pin slows that down by a couple of minutes: a fair price for
       # timings that do not depend on how busy the other cores are.
+      # `nproc` honours OMP_NUM_THREADS, pinned to 1 above, and would answer 1:
+      # `--all` asks for the cores the machine has, irrespective of the threads
+      # the numerical libraries are allowed to use.
       - name: Choose the core to pin the benchmarks to
         id: pin
-        run: echo "cpu=$(( $(nproc) - 1 ))" >> "$GITHUB_OUTPUT"
+        run: echo "cpu=$(( $(nproc --all) - 1 ))" >> "$GITHUB_OUTPUT"
       - name: Record runner hardware
         run: |
           python3 ci/record_runner.py \
@@ -166,11 +169,24 @@ jobs:
             --durations 15 \
             ${{ inputs.quick && '--quick' || '' }} \
             "${{ matrix.commit }}^!"
+      # Every job checks out the committed results, so uploading the whole
+      # directory ships eight stale files next to the fresh one. The publish job
+      # merges the artifacts with `merge-multiple`, which resolves a collision by
+      # an arbitrary winner, and a commit that is being re-measured then keeps
+      # its old numbers: upload only what this job has just measured.
+      - name: Collect the results of this commit
+        run: |
+          short=$(echo "${{ matrix.commit }}" | cut -c1-8)  # asv "hash_length"
+          mkdir -p upload/"$ASV_MACHINE"
+          cp results/benchmarks.json upload/
+          cp results/"$ASV_MACHINE"/machine.json upload/"$ASV_MACHINE"/
+          cp results/"$ASV_MACHINE"/"$short"-*.json upload/"$ASV_MACHINE"/
+          ls -l upload/"$ASV_MACHINE"/
       - name: Upload results
         uses: actions/upload-artifact@v4
         with:
           name: asv-results-${{ matrix.commit }}
-          path: results
+          path: upload
           if-no-files-found: error
           retention-days: 7
       - name: Upload runner description
