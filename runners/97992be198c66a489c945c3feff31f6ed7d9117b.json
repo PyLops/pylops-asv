@@ -1,6 +1,6 @@
 {
   "arch": "x86_64",
-  "benchmarked_at": "2026-09-18T19:42:34Z",
+  "benchmarked_at": "2026-09-18T20:30:32Z",
   "bogomips": "4890.86",
   "commit": "97992be198c66a489c945c3feff31f6ed7d9117b",
   "cpu": "AMD EPYC 7763 64-Core Processor",
@@ -120,9 +120,9 @@
   "os": "Linux",
   "ram_mb": 15989,
   "run_attempt": "1",
-  "run_id": "35386484489",
+  "run_id": "35390954550",
   "stepping": "1",
-  "taskset_cpu": "0",
+  "taskset_cpu": "3",
   "threads": {
     "MKL_NUM_THREADS": "1",
     "NUMBA_NUM_THREADS": "1",

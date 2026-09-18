@@ -189,11 +189,14 @@ jobs:
           path: upload
           if-no-files-found: error
           retention-days: 7
+      # Only this job's own file, for the same reason as the results above: the
+      # checkout carries the description of every commit benchmarked so far, and
+      # a merged artifact would restore the stale ones over the fresh ones.
       - name: Upload runner description
         uses: actions/upload-artifact@v4
         with:
           name: asv-runner-${{ matrix.commit }}
-          path: runners
+          path: runners/${{ matrix.commit }}.json
           if-no-files-found: error
           retention-days: 7
 
