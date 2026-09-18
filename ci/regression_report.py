@@ -26,6 +26,22 @@ out of the report:
 
 Peak-memory results carry no runner factor (allocations do not depend on the
 CPU), so they are compared directly against a tighter threshold.
+
+Better than normalising, when it is available: every job also benchmarks a fixed
+*anchor* commit on its own runner, and ``anchors/<commit>.json`` holds those
+reference timings. The anchor code never changes, so whatever moves its timings
+is the machine, and subtracting them cancels the runner exactly, per benchmark,
+rather than estimating it from benchmarks that may have changed themselves. The
+report falls back to the estimate for the commits and benchmarks an anchor does
+not cover.
+
+Normalisation cannot rescue every comparison. ``runners/<commit>.json`` records
+what measured each commit, and the hardware turns out to differ in kind and not
+only in speed: two runners reporting the very same CPU model can expose or mask
+AVX-512, which is worth a factor of three to six on the numerically heavy
+benchmarks. A step whose commits before and after it were measured on different
+hardware is therefore reported apart, as a comparison the hardware explains just
+as well as the code would.
 """
 
 import argparse
@@ -164,6 +180,58 @@ def bucket(key: tuple[str, str], baseline: float) -> str:
     return f"time{index}"
 
 
+class Anchors:
+    """The reference timings measured next to each commit, from ``anchors/``.
+
+    ``anchors/<commit>.json`` holds the asv results of a fixed anchor commit,
+    benchmarked on the very machine that measured ``<commit>`` (see
+    ``ci/collect_anchor.py``). The anchor code never changes, so whatever moves
+    its timings is the machine: subtracting them cancels the runner exactly, per
+    benchmark, where the bucket medians of :class:`Normalised` can only estimate
+    it from benchmarks that may themselves have changed.
+
+    ``factor(commit, key)`` is, in log space, how much slower the anchor ran on
+    that commit's runner than it usually does. It is ``None`` when the commit has
+    no anchor (the history benchmarked before anchors existed) or when the anchor
+    has no result for that benchmark (an operator younger than the anchor), and
+    the caller falls back to the bucket estimate.
+    """
+
+    def __init__(self, directory: pathlib.Path) -> None:
+        self.values: dict[str, dict[tuple[str, str], float]] = {}
+        self.names: dict[str, str] = {}
+        for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+            try:
+                data = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            commit = data.get("measured_for", path.stem)[:HASH_LENGTH]
+            self.values[commit] = measurements(data)
+            self.names[commit] = data.get("anchor", data.get("anchor_commit", "?"))
+        keys = {key for values in self.values.values() for key in values}
+        self.levels = {
+            key: statistics.median(
+                math.log(values[key])
+                for values in self.values.values()
+                if key in values
+            )
+            for key in keys
+            # a level needs something to be a median of
+            if sum(key in values for values in self.values.values()) > 1
+        }
+
+    def covers(self, commit: str, key: tuple[str, str]) -> bool:
+        return key in self.levels and key in self.values.get(commit, {})
+
+    def factor(self, commit: str, key: tuple[str, str]) -> float | None:
+        if not self.covers(commit, key):
+            return None
+        return math.log(self.values[commit][key]) - self.levels[key]
+
+    def name(self, commit: str) -> str | None:
+        return self.names.get(commit)
+
+
 class Normalised:
     """The measurements with the per-benchmark level and the hardware removed.
 
@@ -178,7 +246,8 @@ class Normalised:
     hardware noise the rest of the report is careful to ignore.
     """
 
-    def __init__(self, results: list[Result]) -> None:
+    def __init__(self, results: list[Result], anchors: Anchors | None = None) -> None:
+        self.anchors = anchors
         keys = {key for result in results for key in result.values}
         levels = {
             key: statistics.median(
@@ -207,7 +276,11 @@ class Normalised:
             factors = runner_factors(deviation, self.buckets)
             self.factors[result.commit] = factors
             for key, value in deviation.items():
-                self.residual[key][result.commit] = value - factors[self.buckets[key]]
+                # the anchor measures this runner on this very benchmark; the
+                # bucket median is the estimate to fall back on without one
+                anchored = anchors.factor(result.commit, key) if anchors else None
+                factor = factors[self.buckets[key]] if anchored is None else anchored
+                self.residual[key][result.commit] = value - factor
 
     def series(self, key, results: list[Result]) -> list[tuple[Result, float]]:
         """Residuals of one benchmark over the commits that measured it."""
@@ -245,6 +318,86 @@ def runner_factors(
     }
 
 
+class Hardware:
+    """What measured each commit, from ``runners/<commit>.json``.
+
+    Commits are grouped into classes of hardware that are *comparable*: same
+    CPU model, same answer to "is AVX-512 available", same number of cores and
+    the same measurement setup (threads pinned to one, benchmarks pinned to one
+    core). Anything else and a ratio between two commits measures the machines
+    as much as the code.
+
+    The class of a commit benchmarked before the descriptions were recorded, or
+    of one whose file is missing, is ``None``: unknown hardware is never used to
+    dismiss a step, it just cannot be used to confirm one either.
+    """
+
+    # instruction sets worth distinguishing: same CPU model, wildly different
+    # timings depending on whether the VM exposes them
+    FLAGS = ("avx512f", "avx2")
+
+    def __init__(self, directory: pathlib.Path, machine: str) -> None:
+        self.machine = machine
+        self.descriptions: dict[str, dict] = {}
+        for path in sorted(directory.glob("*.json")) if directory.is_dir() else []:
+            try:
+                description = json.loads(path.read_text())
+            except json.JSONDecodeError:
+                continue
+            commit = description.get("commit", path.stem)[:HASH_LENGTH]
+            self.descriptions[commit] = description
+
+    def describe(self, commit: str) -> dict | None:
+        return self.descriptions.get(commit)
+
+    def klass(self, commit: str) -> str | None:
+        """Identity of the hardware, as far as comparability goes."""
+        description = self.descriptions.get(commit)
+        if description is None:
+            return None
+        flags = set(description.get("flags", ()))
+        sets = "+".join(flag for flag in self.FLAGS if flag in flags) or "baseline"
+        threads = sorted(set(description.get("threads", {}).values()))
+        setup = (
+            f"{','.join(threads) or '?'}thr/core{description.get('taskset_cpu', '?')}"
+        )
+        return f"{description.get('cpu', '?')} [{sets}] {description.get('num_cpu', '?')}cpu {setup}"
+
+    def comparable(self, one: list[str], other: list[str]) -> bool:
+        """Whether two groups of commits were measured on the same hardware.
+
+        Unknown hardware is comparable with anything: without a description
+        there is nothing to object with.
+        """
+        classes = {self.klass(commit) for commit in one} - {None}
+        others = {self.klass(commit) for commit in other} - {None}
+        return not classes or not others or bool(classes & others)
+
+    def table(self, results: list["Result"], anchors: "Anchors") -> list[str]:
+        """Markdown table of the hardware behind each commit."""
+        lines = [
+            "| commit | CPU | instruction sets | cores | threads | pinned to | anchor |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for result in results:
+            anchor = anchors.name(result.commit) or "_none_"
+            description = self.describe(result.commit)
+            if description is None:
+                lines.append(
+                    f"| {result.label} | _not recorded_ | - | - | - | - | {anchor} |"
+                )
+                continue
+            flags = set(description.get("flags", ()))
+            sets = ", ".join(f for f in self.FLAGS if f in flags) or "baseline"
+            threads = sorted(set(description.get("threads", {}).values())) or ["?"]
+            lines.append(
+                f"| {result.label} | {description.get('cpu', '?')} | {sets} "
+                f"| {description.get('num_cpu', '?')} | {', '.join(threads)} "
+                f"| core {description.get('taskset_cpu', '?')} | {anchor} |"
+            )
+        return lines
+
+
 class Step:
     """A sustained change of level in the series of one benchmark."""
 
@@ -254,7 +407,15 @@ class Step:
         self.since = since
         self.before = before  # commits at the old level
         self.after = after  # commits at the new level, `since` first
-        self.confirmed = len(after) >= 2
+        # set by `find_steps` once the hardware of the two levels is known: a
+        # step that lines up with a change of machine is not evidence of either
+        self.confounded = False
+        self.reproduced = len(after) >= 2
+
+    @property
+    def confirmed(self) -> bool:
+        """Reproduced on a second commit, and not explained by the hardware."""
+        return self.reproduced and not self.confounded
 
     @property
     def name(self) -> str:
@@ -304,17 +465,37 @@ def find_steps(
     normalised: Normalised,
     threshold: float,
     memory_threshold: float,
+    hardware: Hardware,
+    anchors: Anchors | None = None,
 ) -> list[Step]:
-    """Every regression above the threshold of its unit, largest first."""
+    """Every regression above the threshold of its unit, largest first.
+
+    A step is marked as confounded when no commit before it shares its hardware
+    with a commit after it: the machine changed exactly where the timing did,
+    and the two explanations cannot be told apart. Peak memory is exempt, as
+    allocations do not depend on the machine.
+    """
     steps = []
     for key in normalised.residual:
         series = normalised.series(key, results)
         if len(series) <= MIN_BASELINE:
             continue
-        limit = memory_threshold if bucket(key, 0.0) == "peakmem" else threshold
-        step = find_step(key, series, limit)
-        if step is not None:
-            steps.append(step)
+        memory = bucket(key, 0.0) == "peakmem"
+        step = find_step(key, series, memory_threshold if memory else threshold)
+        if step is None:
+            continue
+        if not memory:
+            # with an anchor on both sides the runner is already cancelled, so
+            # the hardware cannot be the explanation of what is left
+            anchored = anchors is not None and all(
+                anchors.covers(result.commit, key)
+                for result in step.before + step.after
+            )
+            step.confounded = not anchored and not hardware.comparable(
+                [result.commit for result in step.before],
+                [result.commit for result in step.after],
+            )
+        steps.append(step)
     return sorted(steps, key=lambda step: -step.ratio)
 
 
@@ -379,11 +560,14 @@ def report(
     normalised: Normalised,
     steps: list[Step],
     lost: list[tuple[str, str]],
+    hardware: Hardware,
+    anchors: Anchors,
     args: argparse.Namespace,
 ) -> tuple[str, bool]:
     """Render the markdown report, and whether it holds a confirmed regression."""
     confirmed = [step for step in steps if step.confirmed]
-    suspected = [step for step in steps if not step.confirmed]
+    confounded = [step for step in steps if step.confounded]
+    suspected = [step for step in steps if not step.confirmed and not step.confounded]
     newest = results[-1]
     lines = [
         "# asv regression report",
@@ -393,6 +577,10 @@ def report(
         f"timing steps up by {args.threshold}x "
         f"({args.memory_threshold}x for peak memory) and stays there, after the "
         "hardware differences between runners have been normalised out.",
+        "",
+        f"{sum(anchors.name(result.commit) is not None for result in results)} of "
+        f"them carry an anchor measurement, which cancels their runner exactly "
+        f"instead of estimating it.",
         "",
     ]
 
@@ -407,6 +595,20 @@ def report(
         ]
     else:
         lines += ["## ✅ No confirmed regression", ""]
+
+    if confounded:
+        lines += [
+            f"## 🎲 {len(confounded)} step(s) the hardware explains as well",
+            "",
+            "Every commit before the step was measured on different hardware "
+            "from every commit after it, so the change of level cannot be "
+            "attributed to the code: benchmarking one of these commits again, "
+            "on a runner of the other kind, is what settles it. The hardware of "
+            "each commit is at the bottom of this report.",
+            "",
+            *table(confounded, results),
+            "",
+        ]
 
     if suspected:
         lines += [
@@ -437,6 +639,17 @@ def report(
         ]
 
     lines += [
+        "<details><summary>Hardware that measured each commit</summary>",
+        "",
+        "Recorded by `ci/record_runner.py` in `runners/`. Two runners reporting "
+        "the same CPU model do not necessarily offer the same instruction sets: "
+        "AVX-512 is masked on some of them, which is worth a factor of three to "
+        "six on the numerically heavy benchmarks and is why the table spells the "
+        "instruction sets out.",
+        "",
+        *hardware.table(results, anchors),
+        "</details>",
+        "",
         "<details><summary>Runner spread between the benchmarked commits</summary>",
         "",
         "Timings of the same code on the GitHub-hosted runners, relative to the "
@@ -502,6 +715,16 @@ def main(argv: list[str] | None = None) -> int:
         "--machine", default="gha-ubuntu-latest", help="machine whose results to read"
     )
     parser.add_argument(
+        "--runners",
+        default="runners",
+        help="directory with the hardware description of each benchmarked commit",
+    )
+    parser.add_argument(
+        "--anchors",
+        default="anchors",
+        help="directory with the anchor measurement taken next to each commit",
+    )
+    parser.add_argument(
         "--repo", help="pylops checkout, used to name commits after their release tag"
     )
     parser.add_argument(
@@ -538,9 +761,15 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(msg)
     label_commits(results, args.repo)
 
-    normalised = Normalised(results)
-    steps = find_steps(results, normalised, args.threshold, args.memory_threshold)
-    text, _ = report(results, normalised, steps, find_lost(results), args)
+    hardware = Hardware(pathlib.Path(args.runners), args.machine)
+    anchors = Anchors(pathlib.Path(args.anchors))
+    normalised = Normalised(results, anchors)
+    steps = find_steps(
+        results, normalised, args.threshold, args.memory_threshold, hardware, anchors
+    )
+    text, _ = report(
+        results, normalised, steps, find_lost(results), hardware, anchors, args
+    )
     print(text, file=args.output)
     if args.output is not sys.stdout:
         print(text)
