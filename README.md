@@ -80,7 +80,13 @@ reads `results/`, and `ci/regression_report.py` keeps the hardware out of the pi
   dominated by Python overhead than on the numerically heavy ones), and
 - only *confirming* a regression once it **persists** over at least two commits, i.e. was
   reproduced on two runners. A step at the newest commit alone is listed separately, to be
-  settled by the next nightly run.
+  settled by the next nightly run, and
+- reading `runners/` to check that the commits before and after a step share their
+  hardware. Two runners reporting the same CPU model do not necessarily expose the same
+  instruction sets (AVX-512 is masked on some of them, which is worth a factor of three to
+  six on the numerically heavy benchmarks), so a step that lines up exactly with a change
+  of machine is reported apart: the hardware explains it as well as the code would, and
+  re-benchmarking one of the commits is what settles it.
 
 A confirmed regression is reported as a warning annotation on the run, which stays green.
 The report also lists the benchmarks that stopped producing a result and, for reference,
