@@ -9,7 +9,13 @@
 #
 # Results are committed to `results/` on `main`; the html is generated from
 # them with `asv publish` and deployed through GitHub Pages (source: "GitHub
-# Actions") at https://pylops.github.io/pylops-asv/.
+# Actions") at https://pylops.github.io/pylops-asv/. The hardware that measured
+# each commit is committed next to them, as `runners/<commit>.json`.
+#
+# Benchmarks are single-threaded and pinned to one core, so that a timing
+# depends as little as possible on which runner it landed on. Results measured
+# before that are not comparable with the ones after it: the whole history was
+# re-benchmarked with these settings rather than left as a broken series.
 name: PyLops-benchmarks
 
 on:
@@ -101,6 +107,20 @@ jobs:
       max-parallel: 3
       matrix:
         commit: ${{ fromJSON(needs.plan.outputs.commits) }}
+    # Runners differ in how many cores they offer, and a multi-threaded BLAS or
+    # numba kernel then measures the machine rather than the operator: every
+    # numerical library is restricted to one thread, so that a timing depends as
+    # little as possible on which runner produced it. Peak performance is not
+    # what is tracked here, reproducibility is. They are set as job environment
+    # variables on purpose: declaring them in the `matrix` of `asv.conf.json`
+    # would make them part of the environment name, hence start a second series
+    # in the published graphs instead of continuing the existing one.
+    env:
+      OMP_NUM_THREADS: 1
+      OPENBLAS_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+      NUMEXPR_NUM_THREADS: 1
+      NUMBA_NUM_THREADS: 1
     steps:
       - name: Check out pylops-asv
         uses: actions/checkout@v6
@@ -112,8 +132,24 @@ jobs:
         run: uv sync --locked --no-dev
       - name: Register machine
         run: uv run --no-sync asv machine --yes --machine "$ASV_MACHINE"
+      # The kernel is otherwise free to move the benchmark between cores, which
+      # costs a cache reload every time. The last core is used, as core 0 also
+      # serves the interrupts. `asv run` builds the pylops wheel as well, and
+      # the pin slows that down by a couple of minutes: a fair price for
+      # timings that do not depend on how busy the other cores are.
+      - name: Choose the core to pin the benchmarks to
+        id: pin
+        run: echo "cpu=$(( $(nproc) - 1 ))" >> "$GITHUB_OUTPUT"
+      - name: Record runner hardware
+        run: |
+          python3 ci/record_runner.py \
+            --commit "${{ matrix.commit }}" \
+            --machine "$ASV_MACHINE" \
+            --taskset-cpu "${{ steps.pin.outputs.cpu }}" \
+            --output "runners/${{ matrix.commit }}.json"
       - name: Run benchmarks for ${{ matrix.commit }}
         run: |
+          taskset -c "${{ steps.pin.outputs.cpu }}" \
           uv run --no-sync asv run \
             --machine "$ASV_MACHINE" \
             ${{ (github.event_name == 'schedule' || inputs.skip_benchmarks) && '--skip-existing-successful' || '' }} \
@@ -127,6 +163,13 @@ jobs:
         with:
           name: asv-results-${{ matrix.commit }}
           path: results
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload runner description
+        uses: actions/upload-artifact@v4
+        with:
+          name: asv-runner-${{ matrix.commit }}
+          path: runners
           if-no-files-found: error
           retention-days: 7
 
@@ -159,12 +202,20 @@ jobs:
           pattern: asv-results-*
           path: new-results
           merge-multiple: true
+      - name: Download new runner descriptions
+        uses: actions/download-artifact@v5
+        with:
+          pattern: asv-runner-*
+          path: new-runners
+          merge-multiple: true
       - name: Commit and push results
         run: |
           cp -r new-results/. results/
+          mkdir -p runners
+          cp -r new-runners/. runners/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results
+          git add results runners
           if git diff --cached --quiet; then
             echo "No new results"
             exit 0

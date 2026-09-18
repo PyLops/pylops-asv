@@ -10,6 +10,10 @@ PYLOPS_REPO ?= ../pylops
 ASV_LOCAL_CONF := .asv/asv.local.conf.json
 # Port used by `asv preview`
 ASV_PORT ?= 8765
+# Single-threaded numerical libraries, as in the PyLops-benchmarks workflow: a
+# multi-threaded BLAS or numba kernel measures the machine rather than the operator
+THREAD_PINS := OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+	NUMEXPR_NUM_THREADS=1 NUMBA_NUM_THREADS=1
 # Extra arguments for `make regressions`, e.g. make regressions REPORT_ARGS="--threshold 1.3"
 REPORT_ARGS ?=
 
@@ -42,12 +46,13 @@ benchcheck:
 bench:
 	# Run the asv benchmarks locally against $(PYLOPS_REPO) installed in editable mode
 	# (results in .asv/results-local, never uploaded; the GitHub Actions run published at
-	# https://pylops.github.io/pylops-asv/ is the reference)
+	# https://pylops.github.io/pylops-asv/ is the reference). Threads are pinned as in
+	# the workflow, so that local numbers can be read against the published ones
 	make uvcheck
 	$(UV) pip install -e $(PYLOPS_REPO) && \
 	PYLOPS_REPO=$(PYLOPS_REPO) $(UV) run --no-sync python ci/local_conf.py && \
 	$(UV) run --no-sync asv machine --yes && \
-	$(UV) run --no-sync asv run --config $(ASV_LOCAL_CONF) --python=same \
+	$(THREAD_PINS) $(UV) run --no-sync asv run --config $(ASV_LOCAL_CONF) --python=same \
 	--set-commit-hash $$(git -C $(PYLOPS_REPO) rev-parse HEAD) --show-stderr $(BENCH_ARGS)
 
 benchpreview:
