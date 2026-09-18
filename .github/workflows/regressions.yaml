@@ -1,0 +1,67 @@
+# Look for worrying performance regressions in the results committed by the
+# PyLops-benchmarks workflow, and write a report to the run summary.
+#
+# * schedule (weekly, Monday 07:17 UTC): report on everything benchmarked so far
+# * workflow_dispatch: same, with the thresholds as inputs
+#
+# A confirmed regression is reported as a warning annotation on the run, not as
+# a failure: the run stays green.
+#
+# Nothing is benchmarked here: the job only reads `results/` (a couple of
+# seconds), so it can be re-run at will. See `ci/regression_report.py` for how
+# the hardware differences between runners are normalised out.
+name: PyLops-regressions
+
+on:
+  schedule:
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: "Slowdown factor a timing must reach to be flagged"
+        type: string
+        default: "1.5"
+      memory_threshold:
+        description: "Slowdown factor a peak memory must reach to be flagged"
+        type: string
+        default: "1.2"
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.13"
+  ASV_MACHINE: gha-ubuntu-latest
+  PYLOPS_DIR: pylops
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out pylops-asv
+        uses: actions/checkout@v6
+      # only to name the benchmarked commits after their release tag or branch
+      - name: Check out pylops
+        uses: actions/checkout@v6
+        with:
+          repository: PyLops/pylops
+          path: ${{ env.PYLOPS_DIR }}
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Report regressions
+        env:
+          THRESHOLD: ${{ inputs.threshold || '1.5' }}
+          MEMORY_THRESHOLD: ${{ inputs.memory_threshold || '1.2' }}
+        run: |
+          python3 ci/regression_report.py \
+            --results results \
+            --machine "$ASV_MACHINE" \
+            --repo "$PYLOPS_DIR" \
+            --threshold "$THRESHOLD" \
+            --memory-threshold "$MEMORY_THRESHOLD" \
+            --output "$GITHUB_STEP_SUMMARY" \
+            --annotate
