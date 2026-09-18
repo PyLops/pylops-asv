@@ -28,9 +28,11 @@ of the forward (`matvec`) and adjoint (`rmatvec`) passes. The results are publis
   are skipped). Results are committed to `results/` on `main` and the website is rebuilt
   with `asv publish` and deployed to GitHub Pages.
 - Older releases or arbitrary revision ranges can be benchmarked retroactively by triggering
-  the same workflow manually (*Actions → PyLops-benchmarks → Run workflow*) with either the
-  number of most recent release tags (`last_tags`) or a git revision range (`revisions`,
-  e.g. `v2.7.0..master`). Tick `quick` for a smoke test that runs every benchmark once.
+  the same workflow manually (*Actions → PyLops-benchmarks → Run workflow*) with the number
+  of most recent release tags (`last_tags`), an explicit list of revisions (`commits`, e.g.
+  `v2.8.0 dev~3`, which is how the whole history is re-measured when the way of measuring
+  changes) or a git revision range (`revisions`, e.g. `v2.7.0..master`). Tick `quick` for a
+  smoke test that runs every benchmark once.
 - Two independent switches control what is skipped. `skip_commits` drops the commits that
   already have a results file, and `skip_benchmarks` drops, within each selected commit,
   the benchmarks that already have a successful result. **To back-fill a benchmark that

@@ -6,9 +6,15 @@ sub-directory passed with ``--repo``:
 * on ``schedule`` the heads of the configured branches plus the latest
   release tag (``--last-tags 1``);
 * on ``workflow_dispatch`` either the last ``N`` release tags plus the heads
-  of the configured branches (``--last-tags N``), a single commit (``--sha``)
-  or an arbitrary revision range understood by ``git rev-list``
-  (``--revisions``).
+  of the configured branches (``--last-tags N``), a single commit (``--sha``),
+  an arbitrary revision range understood by ``git rev-list``
+  (``--revisions``) or an explicit list of commits (``--commits``).
+
+``--commits`` is what re-measuring the existing history needs: a range would
+also pull in every commit in between, and the ``a^! b^!`` form does not work
+either, as the newer commit excludes its own ancestors. ``git rev-list
+--no-walk`` resolves exactly the commits given, whatever their ancestry (it
+lists them newest first, which only sets the order of the matrix jobs).
 
 With ``--skip-benchmarked RESULTS_DIR`` commits that already have a results
 file in ``RESULTS_DIR/<machine>/`` are dropped (an empty list is then a valid
@@ -63,6 +69,12 @@ def revisions(repo: str, spec: str) -> list[str]:
     return git(repo, "rev-list", "--reverse", spec).splitlines()
 
 
+def explicit(repo: str, spec: str) -> list[str]:
+    """Resolve a whitespace- or comma-separated list of revisions."""
+    revs = spec.replace(",", " ").split()
+    return git(repo, "rev-list", "--no-walk", *revs).splitlines()
+
+
 def benchmarked(results_dir: pathlib.Path) -> set[str]:
     """Short hashes of the commits with at least one results file."""
     return {
@@ -86,12 +98,18 @@ def main(argv: list[str] | None = None) -> int:
         "--last-tags", type=int, help="last N release tags + branch heads"
     )
     group.add_argument("--revisions", help="git rev-list range, e.g. v2.7.0..master")
+    group.add_argument(
+        "--commits",
+        help='explicit list of revisions, e.g. "v2.8.0 dev~3 c951f38a"',
+    )
     args = parser.parse_args(argv)
 
     if args.sha:
         commits = [resolve(args.repo, args.sha)]
     elif args.last_tags is not None:
         commits = last_tags(args.repo, args.last_tags) + branch_heads(args.repo)
+    elif args.commits:
+        commits = explicit(args.repo, args.commits)
     else:
         commits = revisions(args.repo, args.revisions)
 

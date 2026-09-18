@@ -2,7 +2,8 @@
 #
 # * schedule (nightly, 03:23 UTC): benchmark the heads of pylops master/dev and the latest
 #   release tag, skipping commits that already have results
-# * workflow_dispatch: back-fill releases (`last_tags`) or any revision range. The two
+# * workflow_dispatch: back-fill releases (`last_tags`), an explicit list of commits
+#   (`commits`) or any revision range (`revisions`). The two
 #   skip switches are independent: untick `skip_commits` to revisit commits that already
 #   have results while leaving `skip_benchmarks` ticked, and only the benchmarks without
 #   a result run (what a new operator added to the suite needs)
@@ -28,9 +29,13 @@ on:
         type: string
         default: "dev^!"
       last_tags:
-        description: "Benchmark the last N release tags plus the heads of master and dev (0 = use revisions)"
+        description: "Benchmark the last N release tags plus the heads of master and dev (0 = use commits/revisions)"
         type: string
         default: "0"
+      commits:
+        description: "Explicit revisions to benchmark, space- or comma-separated (e.g. `v2.8.0 dev~3`). Takes precedence over revisions; what re-measuring the existing history needs"
+        type: string
+        default: ""
       skip_commits:
         description: "Skip commits that already have a results file (untick to back-fill commits that were benchmarked before)"
         type: boolean
@@ -77,6 +82,7 @@ jobs:
         id: select
         env:
           LAST_TAGS: ${{ inputs.last_tags || '1' }}
+          COMMITS: ${{ inputs.commits }}
           REVISIONS: ${{ inputs.revisions || 'dev^!' }}
           SKIP: ${{ github.event_name == 'schedule' || inputs.skip_commits }}
         run: |
@@ -86,6 +92,8 @@ jobs:
           fi
           if [ "$LAST_TAGS" != "0" ]; then
             commits=$(python3 ci/select_commits.py --repo "$PYLOPS_DIR" $skip --last-tags "$LAST_TAGS")
+          elif [ -n "$COMMITS" ]; then
+            commits=$(python3 ci/select_commits.py --repo "$PYLOPS_DIR" $skip --commits "$COMMITS")
           else
             commits=$(python3 ci/select_commits.py --repo "$PYLOPS_DIR" $skip --revisions "$REVISIONS")
           fi
