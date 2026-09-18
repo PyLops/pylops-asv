@@ -53,6 +53,13 @@ points. Two measures keep the hardware out of the numbers as much as possible:
   against the published ones. Results measured before this was introduced are not
   comparable with the ones after it, which is why the whole history was re-benchmarked
   rather than left as a series with a step in the middle.
+- **Every job also benchmarks a fixed anchor commit** (`ASV_ANCHOR`, currently `v2.8.0`) on
+  its own runner, and stores those reference timings as `anchors/<commit>.json`. The anchor
+  code never changes, so whatever moves its timings is the machine: the ratio between a
+  commit and its anchor is comparable across runners, which raw timings are not. It roughly
+  doubles the duration of a job, and it is what makes a 1.5x regression visible in spite of
+  runners that differ by more than that. Moving the anchor to a newer release means
+  re-benchmarking the history, so that every commit is measured against the same reference.
 - **The hardware of each run is recorded** by `ci/record_runner.py` in
   `runners/<commit>.json`: CPU model, flags, caches, core count, RAM and the thread
   settings in force. It deliberately does not go into asv's `machine.json`, as asv draws
@@ -78,6 +85,8 @@ reads `results/`, and `ci/regression_report.py` keeps the hardware out of the pi
 - **normalising** each commit by the median shift of comparable benchmarks (grouped by
   order of magnitude, since runners differ far more on the sub-millisecond benchmarks
   dominated by Python overhead than on the numerically heavy ones), and
+- **dividing by the anchor** when both commits carry one, which cancels the runner exactly
+  (per benchmark) instead of estimating it, and makes the hardware caveat below unnecessary,
 - only *confirming* a regression once it **persists** over at least two commits, i.e. was
   reproduced on two runners. A step at the newest commit alone is listed separately, to be
   settled by the next nightly run, and
@@ -144,6 +153,7 @@ benchmarks/          benchmark suite (bench_*.py) and shared base class (common.
 ci/                  helpers used by the workflows and by `make bench`
 results/             results committed by the PyLops-benchmarks workflow
 runners/             hardware that measured each commit (one json per commit)
+anchors/             timings of the anchor commit on that same hardware
 .github/workflows/   benchmarks.yaml (nightly/manual runs + deploy), regressions.yaml
                      (weekly regression report), check.yaml (PRs)
 ```

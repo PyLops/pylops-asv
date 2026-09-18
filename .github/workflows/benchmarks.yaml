@@ -11,7 +11,9 @@
 # Results are committed to `results/` on `main`; the html is generated from
 # them with `asv publish` and deployed through GitHub Pages (source: "GitHub
 # Actions") at https://pylops.github.io/pylops-asv/. The hardware that measured
-# each commit is committed next to them, as `runners/<commit>.json`.
+# each commit is committed next to them, as `runners/<commit>.json`, and so is
+# the timing of a fixed anchor commit on that same machine, as
+# `anchors/<commit>.json`.
 #
 # Benchmarks are single-threaded and pinned to one core, so that a timing
 # depends as little as possible on which runner it landed on. Results measured
@@ -58,6 +60,11 @@ env:
   PYTHON_VERSION: "3.13"
   ASV_MACHINE: gha-ubuntu-latest
   PYLOPS_DIR: pylops
+  # Reference commit benchmarked by every job next to the commit it was given,
+  # on the same runner: the ratio between the two is what can be compared
+  # across runners. Moving it to a newer release costs a re-benchmark of the
+  # history, so that every commit is measured against the same reference.
+  ASV_ANCHOR: v2.8.0
 
 jobs:
   # ---------------------------------------------------------------------------
@@ -174,6 +181,35 @@ jobs:
       # merges the artifacts with `merge-multiple`, which resolves a collision by
       # an arbitrary winner, and a commit that is being re-measured then keeps
       # its old numbers: upload only what this job has just measured.
+      # The anchor goes through the same core pin and the same thread limits;
+      # `asv.anchor.conf.json` only moves the results out of `results/`, and
+      # reuses the environment just built, so this costs the benchmarks
+      # themselves and one wheel build rather than a second environment.
+      - name: Benchmark the anchor (${{ env.ASV_ANCHOR }}) on this runner
+        run: |
+          uv run --no-sync python ci/anchor_conf.py
+          taskset -c "${{ steps.pin.outputs.cpu }}" \
+          uv run --no-sync asv run \
+            --config .asv/asv.anchor.conf.json \
+            --machine "$ASV_MACHINE" \
+            --show-stderr \
+            --launch-method forkserver \
+            ${{ inputs.quick && '--quick' || '' }} \
+            "$ASV_ANCHOR^!"
+      - name: Collect the anchor measurement
+        run: |
+          uv run --no-sync python ci/collect_anchor.py \
+            --results .asv/anchor-results/"$ASV_MACHINE" \
+            --commit "${{ matrix.commit }}" \
+            --anchor "$ASV_ANCHOR" \
+            --output anchors/"${{ matrix.commit }}".json
+      - name: Upload the anchor measurement
+        uses: actions/upload-artifact@v4
+        with:
+          name: asv-anchor-${{ matrix.commit }}
+          path: anchors/${{ matrix.commit }}.json
+          if-no-files-found: error
+          retention-days: 7
       - name: Collect the results of this commit
         run: |
           short=$(echo "${{ matrix.commit }}" | cut -c1-8)  # asv "hash_length"
@@ -235,14 +271,21 @@ jobs:
           pattern: asv-runner-*
           path: new-runners
           merge-multiple: true
+      - name: Download new anchor measurements
+        uses: actions/download-artifact@v5
+        with:
+          pattern: asv-anchor-*
+          path: new-anchors
+          merge-multiple: true
       - name: Commit and push results
         run: |
           cp -r new-results/. results/
-          mkdir -p runners
+          mkdir -p runners anchors
           cp -r new-runners/. runners/
+          cp -r new-anchors/. anchors/
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results runners
+          git add results runners anchors
           if git diff --cached --quiet; then
             echo "No new results"
             exit 0
