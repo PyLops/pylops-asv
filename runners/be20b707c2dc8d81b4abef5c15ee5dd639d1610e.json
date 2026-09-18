@@ -1,7 +1,7 @@
 {
   "arch": "x86_64",
-  "benchmarked_at": "2026-09-18T20:21:16Z",
-  "bogomips": "4890.85",
+  "benchmarked_at": "2026-09-18T21:20:59Z",
+  "bogomips": "4890.84",
   "commit": "be20b707c2dc8d81b4abef5c15ee5dd639d1610e",
   "cpu": "AMD EPYC 7763 64-Core Processor",
   "cpu_family": "25",
@@ -120,7 +120,7 @@
   "os": "Linux",
   "ram_mb": 15989,
   "run_attempt": "1",
-  "run_id": "35390954550",
+  "run_id": "35396283747",
   "stepping": "1",
   "taskset_cpu": "3",
   "threads": {

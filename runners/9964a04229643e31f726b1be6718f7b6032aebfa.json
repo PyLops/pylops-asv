@@ -1,7 +1,7 @@
 {
   "arch": "x86_64",
-  "benchmarked_at": "2026-09-18T20:39:21Z",
-  "bogomips": "4890.85",
+  "benchmarked_at": "2026-09-18T21:51:06Z",
+  "bogomips": "4890.86",
   "commit": "9964a04229643e31f726b1be6718f7b6032aebfa",
   "cpu": "AMD EPYC 7763 64-Core Processor",
   "cpu_family": "25",
@@ -118,9 +118,9 @@
   "machine": "gha-ubuntu-latest",
   "num_cpu": 4,
   "os": "Linux",
-  "ram_mb": 15989,
+  "ram_mb": 15993,
   "run_attempt": "1",
-  "run_id": "35390954550",
+  "run_id": "35396283747",
   "stepping": "1",
   "taskset_cpu": "3",
   "threads": {
