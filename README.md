@@ -2,6 +2,7 @@
 
 [![Benchmarks](https://github.com/PyLops/pylops-asv/actions/workflows/benchmarks.yaml/badge.svg)](https://github.com/PyLops/pylops-asv/actions/workflows/benchmarks.yaml)
 [![Check](https://github.com/PyLops/pylops-asv/actions/workflows/check.yaml/badge.svg)](https://github.com/PyLops/pylops-asv/actions/workflows/check.yaml)
+[![Regressions](https://github.com/PyLops/pylops-asv/actions/workflows/regressions.yaml/badge.svg)](https://github.com/PyLops/pylops-asv/actions/workflows/regressions.yaml)
 
 Continuous benchmarking of [PyLops](https://github.com/PyLops/pylops) operators with
 [airspeed velocity](https://asv.readthedocs.io) (asv).
@@ -39,6 +40,34 @@ of the forward (`matvec`) and adjoint (`rmatvec`) passes. The results are publis
 
 Benchmarks run on GitHub-hosted runners (`ubuntu-latest`), so timings are noisy across
 runs: look at trends and at the peak-memory numbers rather than at single points.
+
+## Regression report
+
+Each commit is benchmarked in its own job, hence on a different runner, and the CPU is
+not recorded: comparing two commits directly mostly measures the hardware. Comparing the
+heads of `master` or `dev` with the previous night at face value would flag a hundred
+benchmarks, most of which recover the next night.
+
+The `PyLops-regressions` workflow runs every Monday (and on demand, *Actions →
+PyLops-regressions → Run workflow*) and writes a report to its
+[run summary](../../actions/workflows/regressions.yaml). Nothing is benchmarked: it only
+reads `results/`, and `ci/regression_report.py` keeps the hardware out of the picture by
+
+- **normalising** each commit by the median shift of comparable benchmarks (grouped by
+  order of magnitude, since runners differ far more on the sub-millisecond benchmarks
+  dominated by Python overhead than on the numerically heavy ones), and
+- only *confirming* a regression once it **persists** over at least two commits, i.e. was
+  reproduced on two runners. A step at the newest commit alone is listed separately, to be
+  settled by the next nightly run.
+
+A confirmed regression is reported as a warning annotation on the run, which stays green.
+The report also lists the benchmarks that stopped producing a result and, for reference,
+how much the runners differed. The same report can be obtained locally with
+
+```bash
+python3 ci/regression_report.py --repo ../pylops        # --repo only names the commits
+python3 ci/regression_report.py --threshold 1.3         # flag smaller slowdowns
+```
 
 ## Adding a benchmark
 
@@ -84,7 +113,8 @@ make benchpreview                                  # browse http://127.0.0.1:876
 ```
 asv.conf.json        asv configuration (project repo, environment matrix, build commands)
 benchmarks/          benchmark suite (bench_*.py) and shared base class (common.py)
-ci/                  helpers used by the workflow and by `make bench`
+ci/                  helpers used by the workflows and by `make bench`
 results/             results committed by the PyLops-benchmarks workflow
-.github/workflows/   benchmarks.yaml (nightly/manual runs + deploy), check.yaml (PRs)
+.github/workflows/   benchmarks.yaml (nightly/manual runs + deploy), regressions.yaml
+                     (weekly regression report), check.yaml (PRs)
 ```

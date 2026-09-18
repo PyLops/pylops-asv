@@ -1,6 +1,6 @@
 UV := $(shell command -v uv 2> /dev/null)
 
-.PHONY: uvcheck install lint format benchcheck bench benchpreview clean
+.PHONY: uvcheck install lint format benchcheck bench benchpreview regressions clean
 
 # Extra arguments for local asv runs, e.g. make bench BENCH_ARGS="--quick -b bench_ffts"
 BENCH_ARGS ?=
@@ -10,6 +10,8 @@ PYLOPS_REPO ?= ../pylops
 ASV_LOCAL_CONF := .asv/asv.local.conf.json
 # Port used by `asv preview`
 ASV_PORT ?= 8765
+# Extra arguments for `make regressions`, e.g. make regressions REPORT_ARGS="--threshold 1.3"
+REPORT_ARGS ?=
 
 uvcheck:
 ifndef UV
@@ -53,6 +55,11 @@ benchpreview:
 	make uvcheck
 	$(UV) run --no-sync asv publish --config $(ASV_LOCAL_CONF) && \
 	$(UV) run --no-sync asv preview --config $(ASV_LOCAL_CONF) --port $(ASV_PORT)
+
+regressions:
+	# Report worrying regressions in the committed results, as the weekly
+	# PyLops-regressions workflow does in its run summary (no benchmark is executed)
+	python3 ci/regression_report.py --repo $(PYLOPS_REPO) $(REPORT_ARGS)
 
 clean:
 	# Remove local asv environments, results and html
