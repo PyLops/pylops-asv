@@ -38,15 +38,35 @@ of the forward (`matvec`) and adjoint (`rmatvec`) passes. The results are publis
   ticked**: the commits are revisited but only the missing benchmarks run. Unticking both
   re-benchmarks everything from scratch.
 
-Benchmarks run on GitHub-hosted runners (`ubuntu-latest`), so timings are noisy across
-runs: look at trends and at the peak-memory numbers rather than at single points.
+Benchmarks run on GitHub-hosted runners (`ubuntu-latest`), so timings are noisier than on
+a dedicated machine: look at trends and at the peak-memory numbers rather than at single
+points. Two measures keep the hardware out of the numbers as much as possible:
+
+- **Every numerical library is restricted to one thread** (`OMP_NUM_THREADS`,
+  `OPENBLAS_NUM_THREADS`, `MKL_NUM_THREADS`, `NUMEXPR_NUM_THREADS`,
+  `NUMBA_NUM_THREADS`) and the benchmarks are **pinned to a single core** with `taskset`.
+  Runners differ in how many cores they offer, so a multi-threaded kernel measures the
+  machine rather than the operator; peak performance is not what is tracked here,
+  reproducibility is. `make bench` pins the same variables, so local numbers can be read
+  against the published ones. Results measured before this was introduced are not
+  comparable with the ones after it, which is why the whole history was re-benchmarked
+  rather than left as a series with a step in the middle.
+- **The hardware of each run is recorded** by `ci/record_runner.py` in
+  `runners/<commit>.json`: CPU model, flags, caches, core count, RAM and the thread
+  settings in force. It deliberately does not go into asv's `machine.json`, as asv draws
+  one line per distinct set of machine parameters and the published series would then
+  split into one line per runner model. The file is overwritten when a commit is
+  re-benchmarked, so it always describes the runner behind the results currently
+  committed.
 
 ## Regression report
 
-Each commit is benchmarked in its own job, hence on a different runner, and the CPU is
-not recorded: comparing two commits directly mostly measures the hardware. Comparing the
-heads of `master` or `dev` with the previous night at face value would flag a hundred
-benchmarks, most of which recover the next night.
+Each commit is benchmarked in its own job, hence on a different runner: comparing two
+commits directly measures the hardware as well as the code. Comparing the heads of
+`master` or `dev` with the previous night at face value used to flag a hundred
+benchmarks, most of which recovered the next night. Single-threaded, core-pinned runs cut
+most of that noise, and `runners/` tells which CPU measured what, but two runners of a
+different model still differ: the report therefore keeps normalising.
 
 The `PyLops-regressions` workflow runs every Monday (and on demand, *Actions →
 PyLops-regressions → Run workflow*) and writes a report to its
@@ -115,6 +135,7 @@ asv.conf.json        asv configuration (project repo, environment matrix, build 
 benchmarks/          benchmark suite (bench_*.py) and shared base class (common.py)
 ci/                  helpers used by the workflows and by `make bench`
 results/             results committed by the PyLops-benchmarks workflow
+runners/             hardware that measured each commit (one json per commit)
 .github/workflows/   benchmarks.yaml (nightly/manual runs + deploy), regressions.yaml
                      (weekly regression report), check.yaml (PRs)
 ```
